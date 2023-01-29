@@ -1,10 +1,11 @@
 import os
 import json
-import datetime
+import time
+from datetime import datetime
 import requests
-from utils.mssqlconnector import mssqlConnect
-from utils.hizliservis import hizliServis
-from utils.filegenerator import fileGenerator
+from utils.mssql_connector import MsSqlConnector
+from utils.hizli_servis import HizliService
+#from utils.filegenerator import fileGenerator
 
 
 AppType = {
@@ -20,32 +21,37 @@ MsgTemplates = {
     "FATURA": "Sayın *{}* ,\n\n *{}* firmasından \n *{}* tarihli \n *{}* numaralı \n *{} {}* tutarında \n *{}* gelmiştir. \n"
 }
 
-def send_mhatsapp(data, belge_tarihi, pdf_obj):
-    """
-    """
-    print("1")
-    if data['ProfileId'] == 'TEMELIRSALIYE':
-        caption = MsgTemplates["IRSALIYE"].format("firmaAdı",
-                                                  data['TargetTitle'], belge_tarihi, data['DocumentId'],
-                                                  data['ProfileId'])
-    else:
-        caption = MsgTemplates["FATURA"].format("firmaAdı",
-                                                data['TargetTitle'], belge_tarihi, data['DocumentId'],
-                                                "{:,.2f}".format(float(data['PayableAmount'])),
-                                                data['DocumentCurrencyCode'],
-                                                data['ProfileId'])
-    print("2")
+def send_invoice_text(msg, tels):
     token = "c3a87aad6880401b876a7d1eb07b6b67"
-    data2 = {'type': 'document','filename':'{}.pdf'.format(data['DocumentId']),
-            'file':pdf_obj,
-            'message':caption,
-            'numbers': "905527932091",
-            #'numbers': "905527932091,905334993344",
-            'token':[token]
+    json_data = {'type': 'text',
+                 'message': msg,
+                 'numbers': tels,
+                 'token':[token]
     }
     print("before send")
     req = requests.post('http://api.mhatsapp.com/api/v3/message/send/',
-                        data=json.dumps({'action':data2}),
+                        data=json.dumps({'action':json_data}),
+                        headers={'Content-type':'application/json'})
+    print("after send")
+
+def send_invoice_pdf(msg, tels, pdf_obj, pdf_name):
+    """Send invoice in whatsapp
+    Args:
+        msg: Text message
+        tels: Comma separated list of telephone numbers.
+
+    """
+    token = "c3a87aad6880401b876a7d1eb07b6b67"
+    json_data = {'type': 'document',
+                 'filename': "{}.pdf".format(pdf_name),
+                 'file': pdf_obj,
+                 'message': msg,
+                 'numbers': tels,
+                 'token':[token]
+    }
+    print("before send")
+    req = requests.post('http://api.mhatsapp.com/api/v3/message/send/',
+                        data=json.dumps({'action':json_data}),
                         headers={'Content-type':'application/json'})
     print("after send")
 
@@ -53,41 +59,86 @@ def get_users_list():
     """Get user list from Makrosum DB
     """
     users = list()
-    db = mssqlConnect('dbmain.ffatura.com', 'sa', '3genYildiz.', 'ffatura_main', '1433')
+    db = MsSqlConnector('dbmain.ffatura.com', 'sa', '3genYildiz.', 'ffatura_main', '1433')
     db.createConnection()
     users = db.selectProcedure('kullanicilari_getir')
 
     return users
 
-def get_invoice(hbt_user, hbt_password):
-    """Get user's invoice.
+def get_invoices(hbt_user, hbt_password):
+    """Get invoices collection for one user.
+    Args:
+        hbt_user: username
+        hbt_password: password
+    Returns:
+        Dictionary of invoices collection. {"app_type": [invoices list],...}
     """
-    hizli_service = hizliServis(hbt_user, hbt_password)
-    for app_type in [AppType["GELEN_E-FATURA"], AppType["GELEN_E-IRSALIYE"]]:
-        gelen_belgeler = hizli_service.get_documents(app_type)
-        for gelen_belge in gelen_belgeler:
-            print("gelen_belge:", gelen_belge)
-            date = datetime.datetime.fromisoformat(gelen_belge['IssueDate'])
-            belge_tarihi = date.strftime('%d-%m-%Y')
-            file_name = "{}-({})-{}".format(gelen_belge["DocumentId"], belge_tarihi, gelen_belge["TargetTitle"])
-            app_type_ = int(gelen_belge['AppType'])
-            uuid_ = gelen_belge['UUID']
-            print("before media download")
-            media = hizli_service.download_media(app_type, uuid_,'PDF')
-            print("after media download")
+    invoices_collection = dict()
+    hizli_service = HizliService(hbt_user, hbt_password)
+    for app_type_name, app_type in AppType.items():
+        invoices = hizli_service.get_documents(app_type, "ALL")
+        invoices_collection[app_type] = invoices
+    return invoices_collection
 
-            send_mhatsapp(gelen_belge, belge_tarihi, media)
+def generate_message(invoice, firma_adi):
+    doc_id = invoice['DocumentId']
+    profile_id = invoice['ProfileId']
+    target_title = invoice['TargetTitle']
+    date = datetime.fromisoformat(invoice['IssueDate']).strftime('%d-%m-%Y')
 
-            exit(0)
-            fileGenerator.writePDF(file_name, media, os.path.dirname(os.path.realpath(__file__)))
-            media = hizli_service.download_media(app_type, uuid_,'XML')
-            fileGenerator.writeXML(file_name, media, os.path.dirname(os.path.realpath(__file__)))
+    msg = str()
+    if invoice['ProfileId'] == 'TEMELIRSALIYE':
+        template = MsgTemplates['IRSALIYE']
+        msg = template.format(firma_adi, target_title, date, doc_id, profile_id)
+    else:
+        template = MsgTemplates['FATURA']
+        payable_amount = "{:,.2f}".format(float(invoice['PayableAmount']))
+        currency_code = invoice['DocumentCurrencyCode']
+        msg = template.format(firma_adi, target_title, date, doc_id, payable_amount,
+                              currency_code, profile_id)
 
+    return msg
+
+def get_file_name(invoice):
+    date = datetime.fromisoformat(invoice['IssueDate']).strftime('%d-%m-%Y')
+    doc_id = invoice['DocumentId']
+    target_title = invoice['TargetTitle']
+    file_name = "{}-({})-{}".format(doc_id, date, target_title)
+    return file_name
+
+def send_invoices(invoices_collection, hbt_user, hbt_password, tels, token,
+                  firma_adi):
+    hizli_service = HizliService(hbt_user, hbt_password)
+    for app_type, invoices_list in invoices_collection.items():
+        for invoice in invoices_list:
+            print("0")
+            message = generate_message(invoice, firma_adi)
+            uuid = invoice['UUID']
+            app_type = int(invoice['AppType'])
+            pdf_obj = hizli_service.download_media(app_type, uuid, 'PDF')
+            # TODO delete this list
+            tels = "905527932091, 905334993344"
+
+            pdf_name = get_file_name(invoice)
+
+            send_invoice_pdf(message, tels, pdf_obj, pdf_name)
+            time.sleep(1)
+            send_invoice_text(message, tels)
+            hizli_service.mark_taken([uuid,], app_type)
+        exit(0)
 
 
 if __name__ == '__main__':
     users = get_users_list()
     for user in users:
+        print(user)
         hbt_user = user['hbt_user']
-        password = user['hbt_password']
-        get_invoice(hbt_user, password)
+        hbt_password = user['hbt_password']
+        firma_adi = user['title']
+        token = user['mhatsapptels']
+        tels = user['mhatsapptoken']
+        invoices_collection = get_invoices(hbt_user, hbt_password)
+        send_invoices(invoices_collection, hbt_user, hbt_password, tels,
+                      token, firma_adi)
+        exit(0)
+

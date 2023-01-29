@@ -2,7 +2,7 @@ import datetime
 import pyodbc
 import traceback
 
-class mssqlConnect:
+class MsSqlConnector:
     def __init__(self,host,username,password,dbasename,port=1433):
         self.host = host
         self.username = username
