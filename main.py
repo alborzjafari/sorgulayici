@@ -10,11 +10,11 @@ from utils.hizli_servis import HizliService
 
 
 AppType = {
-    "GELEN_E-FATURA": 1,
-    "GIDEN_E-FATURA": 2,
-    "GIDEN_E-ARSIV_FATURA": 3,
-    "GELEN_E-IRSALIYE": 4,
-    "GIDEN_E-IRSALIYE": 5
+    'GELEN_E-FATURA': 1,
+    'GIDEN_E-FATURA': 2,
+    'GIDEN_E-ARSIV_FATURA': 3,
+    'GELEN_E-IRSALIYE': 4,
+    'GIDEN_E-IRSALIYE': 5
 }
 
 MsgTemplates = {
@@ -64,7 +64,7 @@ def get_users_list():
     """Get user list from Makrosum DB
     """
     users = list()
-    db = MsSqlConnector('dbmain.ffatura.com', 'sa', '3genYildiz.', 'ffatura_main', '1433')
+    db = MsSqlConnector('newmssql.makrosum.com', 'sa', '3genYildiz.', 'ffatura_main', '1433')
     db.createConnection()
     users = db.selectProcedure('kullanicilari_getir')
 
@@ -81,7 +81,7 @@ def get_invoices(hbt_user, hbt_password):
     invoices_collection = dict()
     hizli_service = HizliService(hbt_user, hbt_password)
     for app_type_name, app_type in AppType.items():
-        invoices = hizli_service.get_documents(app_type, 'ALL')
+        invoices = hizli_service.get_documents(app_type)
         invoices_collection[app_type] = invoices
 
     return invoices_collection
@@ -185,11 +185,7 @@ def send_giden_invoice(hizli_service, app_type, invoice, uuid, message):
 
 def send_gelen_invoice(hizli_service, app_type, invoice, uuid, message, tels):
     pdf_obj = hizli_service.download_media(app_type, uuid, 'PDF')
-    # TODO delete this list
-    tels = "905527932091, 905334993344"
-
     pdf_name = get_file_name(invoice)
-
     send_invoice_pdf(message, tels, pdf_obj, pdf_name)
     time.sleep(1)
     send_invoice_text(message, tels)
@@ -199,31 +195,40 @@ def send_invoices(invoices_collection, hbt_user, hbt_password, tels, token,
                   firma_adi):
     hizli_service = HizliService(hbt_user, hbt_password)
     for _, invoices_list in invoices_collection.items():
+        if invoices_list is None:
+            continue
         for invoice in invoices_list:
             app_type = invoice['AppType']
             message = generate_message(invoice, firma_adi, app_type)
             uuid = invoice['UUID']
-            print("------------------------------\n", invoice)
+            #print("------------------------------\n", invoice)
             if app_type == AppType['GIDEN_E-FATURA'] or \
                     app_type == AppType['GIDEN_E-ARSIV_FATURA']:
                     #app_type == AppType['GIDEN_E-IRSALIYE']:
                         pass
                         #send_giden_invoice(hizli_service, app_type, invoice, uuid, message)
-            # TODO delete this list
-            tels = "905527932091, 905334993344"
-            send_gelen_invoice(hizli_service, app_type, invoice, uuid, message, tels)
+            elif app_type == AppType['GELEN_E-FATURA'] or \
+                    app_type == AppType['GELEN_E-IRSALIYE']:
+                print("TELS:", tels)
+                # TODO delete this list
+                tels = "905527932091, 905334993344"
+                send_gelen_invoice(hizli_service, app_type, invoice, uuid, message, tels)
 
 
 if __name__ == '__main__':
-    users = get_users_list()
-    for user in users:
-        print(user)
-        hbt_user = user['hbt_user']
-        hbt_password = user['hbt_password']
-        firma_adi = user['title']
-        tels = user['mhatsapptels']
-        token = user['mhatsapptoken']
-        invoices_collection = get_invoices(hbt_user, hbt_password)
-        send_invoices(invoices_collection, hbt_user, hbt_password, tels,
-                      token, firma_adi)
-
+    while True:
+        users = get_users_list()
+        for user in users:
+            print("USER:\n", user)
+            hbt_user = user['hbt_user']
+            hbt_password = user['hbt_password']
+            firma_adi = user['title']
+            tels = user['mhatsapptels']
+            token = user['mhatsapptoken']
+            invoices_collection = get_invoices(hbt_user, hbt_password)
+            if len(tels) < 12 or len(token) != 36:
+                continue
+            if invoices_collection is not None:
+                 send_invoices(invoices_collection, hbt_user, hbt_password,
+                               tels, token, firma_adi)
+        time.sleep(1)

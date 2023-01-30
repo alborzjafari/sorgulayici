@@ -47,7 +47,7 @@ class HizliService:
 
     def get_documents(self, app_type, taken_status='NO'):
         bugun = datetime.datetime.now()
-        dun = bugun - datetime.timedelta(days=15)
+        dun = bugun - datetime.timedelta(days=10)
         while True:
             sonuc = self.get('GetDocumentList',
                              {'DateType': 'CreatedDate',
