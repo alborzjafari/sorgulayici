@@ -7,7 +7,6 @@ from datetime import datetime
 import requests
 from utils.mssql_connector import MsSqlConnector
 from utils.hizli_servis import HizliService
-#from utils.filegenerator import fileGenerator
 
 
 AppType = {
@@ -19,9 +18,12 @@ AppType = {
 }
 
 MsgTemplates = {
-    'IRSALIYE': "Sayın *{}* ,\n\n *{}* firmasından \n *{}* tarihli \n *{}* numaralı \n *{}* gelmiştir.\n",
-    'FATURA': "Sayın *{}* ,\n\n *{}* firmasından \n *{}* tarihli \n *{}* numaralı \n *{} {}* tutarında \n *{}* gelmiştir.\n",
-    'GIDEN_FATURA': "Sayın *{}* ,\n\n *{}* firmasından \n *{}* tarihli \n *{}* numaralı \n *{} {}* tutarında \n *{}* gelmiştir.\n"
+    'IRSALIYE': "Sayın *{}* ,\n\n *{}* firmasından \n *{}* tarihli \n *{}* numaralı \n *{}* gelmiştir.\n\n" +
+                "```NOT: Bu mesaj, ffatura.com sistemi tarafından otomatik olarak oluşturulmuştur.```",
+    'FATURA': "Sayın *{}* ,\n\n *{}* firmasından \n *{}* tarihli \n *{}* numaralı \n *{} {}* tutarında \n *{}* gelmiştir.\n\n" +
+              "```NOT: Bu mesaj, ffatura.com sistemi tarafından otomatik olarak oluşturulmuştur.```",
+    'GIDEN_FATURA': "Sayın *{}* ,\n\n *{}* firmasından \n *{}* tarihli \n *{}* numaralı \n *{} {}* tutarında \n *{}* gelmiştir.\n\n" +
+                    "```NOT: Bu mesaj, ffatura.com sistemi tarafından otomatik olarak oluşturulmuştur.```"
 }
 
 def send_invoice_text(msg, tels):
@@ -207,7 +209,6 @@ def send_invoices(invoices_collection, hbt_user, hbt_password, tels, token,
                     #app_type == AppType['GIDEN_E-IRSALIYE']:
                         pass
                         #send_giden_invoice(hizli_service, app_type, invoice, uuid, message)
-            continue
             # TODO delete this list
             tels = "905527932091, 905334993344"
             send_gelen_invoice(hizli_service, app_type, invoice, uuid, message, tels)
