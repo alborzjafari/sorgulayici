@@ -1,6 +1,8 @@
 import os
 import json
 import time
+import base64
+import xmltodict
 from datetime import datetime
 import requests
 from utils.mssql_connector import MsSqlConnector
@@ -17,8 +19,9 @@ AppType = {
 }
 
 MsgTemplates = {
-    "IRSALIYE": "Sayın *{}* ,\n\n *{}* firmasından \n *{}* tarihli \n *{}* numaralı \n *{}* gelmiştir. \n",
-    "FATURA": "Sayın *{}* ,\n\n *{}* firmasından \n *{}* tarihli \n *{}* numaralı \n *{} {}* tutarında \n *{}* gelmiştir. \n"
+    'IRSALIYE': "Sayın *{}* ,\n\n *{}* firmasından \n *{}* tarihli \n *{}* numaralı \n *{}* gelmiştir.\n",
+    'FATURA': "Sayın *{}* ,\n\n *{}* firmasından \n *{}* tarihli \n *{}* numaralı \n *{} {}* tutarında \n *{}* gelmiştir.\n",
+    'GIDEN_FATURA': "Sayın *{}* ,\n\n *{}* firmasından \n *{}* tarihli \n *{}* numaralı \n *{} {}* tutarında \n *{}* gelmiştir.\n"
 }
 
 def send_invoice_text(msg, tels):
@@ -76,25 +79,33 @@ def get_invoices(hbt_user, hbt_password):
     invoices_collection = dict()
     hizli_service = HizliService(hbt_user, hbt_password)
     for app_type_name, app_type in AppType.items():
-        invoices = hizli_service.get_documents(app_type, "ALL")
+        invoices = hizli_service.get_documents(app_type, 'ALL')
         invoices_collection[app_type] = invoices
+
     return invoices_collection
 
-def generate_message(invoice, firma_adi):
+def generate_message(invoice, firma_adi, app_type):
     doc_id = invoice['DocumentId']
     profile_id = invoice['ProfileId']
     target_title = invoice['TargetTitle']
     date = datetime.fromisoformat(invoice['IssueDate']).strftime('%d-%m-%Y')
 
     msg = str()
-    if invoice['ProfileId'] == 'TEMELIRSALIYE':
-        template = MsgTemplates['IRSALIYE']
-        msg = template.format(firma_adi, target_title, date, doc_id, profile_id)
+    if app_type == AppType['GELEN_E-FATURA'] or app_type == AppType['GELEN_E-IRSALIYE']:
+        if invoice['ProfileId'] == 'TEMELIRSALIYE':
+            template = MsgTemplates['IRSALIYE']
+            msg = template.format(firma_adi, target_title, date, doc_id, profile_id)
+        else:
+            template = MsgTemplates['FATURA']
+            payable_amount = "{:,.2f}".format(float(invoice['PayableAmount']))
+            currency_code = invoice['DocumentCurrencyCode']
+            msg = template.format(firma_adi, target_title, date, doc_id, payable_amount,
+                                  currency_code, profile_id)
     else:
-        template = MsgTemplates['FATURA']
+        template = MsgTemplates['GIDEN_FATURA']
         payable_amount = "{:,.2f}".format(float(invoice['PayableAmount']))
         currency_code = invoice['DocumentCurrencyCode']
-        msg = template.format(firma_adi, target_title, date, doc_id, payable_amount,
+        msg = template.format(target_title, firma_adi, date, doc_id, payable_amount,
                               currency_code, profile_id)
 
     return msg
@@ -106,26 +117,100 @@ def get_file_name(invoice):
     file_name = "{}-({})-{}".format(doc_id, date, target_title)
     return file_name
 
+def normalize_tel(tel_no):
+    if tel_no is None:
+        return None
+    tel_no = ''.join([i for i in tel_no if i.isdigit()])
+    int_tel_no = int(tel_no)
+    tel_no = "90" + str(int_tel_no)
+    print("TE:", tel_no)
+    if len(tel_no) == 12:
+        return tel_no
+    else:
+        return None
+
+def get_tels_from_contacts(contact_list):
+    tels = str()
+    sep = ""
+    print("contact list:", contact_list)
+    tels_list = list()
+    for contact, value in contact_list.items():
+        print("contact:", contact)
+        if contact == "cbc:Telephone" and value is not None:
+            normalized_tel = normalize_tel(value)
+            if normalized_tel is not None:
+                tels_list.append(normalized_tel)
+
+    if len(tels_list) == 0:
+        return None
+
+    for tel in tels_list:
+        tels += sep + tel
+        sep = ','
+
+    return tels
+
+def send_giden_invoice(hizli_service, app_type, invoice, uuid, message):
+
+    is_account = invoice['IsAccount']
+    envelop_stat = invoice['EnvelopeStatus']
+    if is_account == True:
+        return
+    else:
+        if envelop_stat != 1300 or envelop_stat != 14000:
+            return
+
+    xml_obj = hizli_service.download_media(app_type, uuid, 'XML')
+    xml_str = base64.b64decode(xml_obj)
+    xml_dic = xmltodict.parse(xml_str)
+    contact_list = xml_dic['Invoice']['cac:AccountingCustomerParty']['cac:Party']['cac:Contact']
+
+    if contact_list is None:
+        return
+    tels = get_tels_from_contacts(contact_list)
+
+    if tels is not None:
+        print("XML Telefonları:", tels)
+        # TODO delete this list
+        tels = "905527932091, 905334993344"
+        pdf_obj = hizli_service.download_media(app_type, uuid, 'PDF')
+        pdf_name = get_file_name(invoice)
+        send_invoice_pdf(message, tels, pdf_obj, pdf_name)
+        time.sleep(1)
+        send_invoice_text(message, tels)
+
+    hizli_service.mark_accounted(uuid, app_type)
+
+def send_gelen_invoice(hizli_service, app_type, invoice, uuid, message, tels):
+    pdf_obj = hizli_service.download_media(app_type, uuid, 'PDF')
+    # TODO delete this list
+    tels = "905527932091, 905334993344"
+
+    pdf_name = get_file_name(invoice)
+
+    send_invoice_pdf(message, tels, pdf_obj, pdf_name)
+    time.sleep(1)
+    send_invoice_text(message, tels)
+    hizli_service.mark_taken([uuid,], app_type)
+
 def send_invoices(invoices_collection, hbt_user, hbt_password, tels, token,
                   firma_adi):
     hizli_service = HizliService(hbt_user, hbt_password)
-    for app_type, invoices_list in invoices_collection.items():
+    for _, invoices_list in invoices_collection.items():
         for invoice in invoices_list:
-            print("0")
-            message = generate_message(invoice, firma_adi)
+            app_type = invoice['AppType']
+            message = generate_message(invoice, firma_adi, app_type)
             uuid = invoice['UUID']
-            app_type = int(invoice['AppType'])
-            pdf_obj = hizli_service.download_media(app_type, uuid, 'PDF')
+            print("------------------------------\n", invoice)
+            if app_type == AppType['GIDEN_E-FATURA'] or \
+                    app_type == AppType['GIDEN_E-ARSIV_FATURA']:
+                    #app_type == AppType['GIDEN_E-IRSALIYE']:
+                        pass
+                        #send_giden_invoice(hizli_service, app_type, invoice, uuid, message)
+            continue
             # TODO delete this list
             tels = "905527932091, 905334993344"
-
-            pdf_name = get_file_name(invoice)
-
-            send_invoice_pdf(message, tels, pdf_obj, pdf_name)
-            time.sleep(1)
-            send_invoice_text(message, tels)
-            hizli_service.mark_taken([uuid,], app_type)
-        exit(0)
+            send_gelen_invoice(hizli_service, app_type, invoice, uuid, message, tels)
 
 
 if __name__ == '__main__':
@@ -135,10 +220,9 @@ if __name__ == '__main__':
         hbt_user = user['hbt_user']
         hbt_password = user['hbt_password']
         firma_adi = user['title']
-        token = user['mhatsapptels']
-        tels = user['mhatsapptoken']
+        tels = user['mhatsapptels']
+        token = user['mhatsapptoken']
         invoices_collection = get_invoices(hbt_user, hbt_password)
         send_invoices(invoices_collection, hbt_user, hbt_password, tels,
                       token, firma_adi)
-        exit(0)
 
