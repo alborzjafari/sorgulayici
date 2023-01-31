@@ -209,9 +209,6 @@ def send_invoices(invoices_collection, hbt_user, hbt_password, tels, token,
                         #send_giden_invoice(hizli_service, app_type, invoice, uuid, message)
             elif app_type == AppType['GELEN_E-FATURA'] or \
                     app_type == AppType['GELEN_E-IRSALIYE']:
-                print("TELS:", tels)
-                # TODO delete this list
-                tels = "905527932091, 905334993344"
                 send_gelen_invoice(hizli_service, app_type, invoice, uuid, message, tels)
 
 
