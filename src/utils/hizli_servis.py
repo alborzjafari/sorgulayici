@@ -24,16 +24,17 @@ class HizliService:
 
     def mark_accounted(self, uuid, app_type):
         while True:
-            sonuc = self.post('SetDocumentFlag',
-                               {'Uuid': uuid,
-                                'AppType': app_type,
-                                'Flag_Name': 'IsAccount',
-                                'Flag_Value': 0})
+            sonuc = self.get('SetDocumentFlag',
+                             {'Uuid': uuid,
+                              'AppType': app_type,
+                              'Flag_Name': 'MUHASEBELESTIRILDI',
+                              'Flag_Value': 1})
             if sonuc == None:
                 print("Accounted retrying")
                 time.sleep(60)
                 return True
             else:
+                print("sonuc:", sonuc)
                 return True
 
     def mark_taken(self, GUIDList, app_type):

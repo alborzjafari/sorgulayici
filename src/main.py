@@ -26,27 +26,25 @@ MsgTemplates = {
                     "```NOT: Bu mesaj, ffatura.com sistemi tarafından otomatik olarak oluşturulmuştur.```"
 }
 
-def send_invoice_text(msg, tels):
-    token = "c3a87aad6880401b876a7d1eb07b6b67"
+def send_invoice_text(msg, tels, token):
     json_data = {'type': 'text',
                  'message': msg,
                  'numbers': tels,
                  'token':[token]
     }
-    print("before send")
+    print("before text send:", token)
     req = requests.post('http://api.mhatsapp.com/api/v3/message/send/',
                         data=json.dumps({'action':json_data}),
                         headers={'Content-type':'application/json'})
     print("after send")
 
-def send_invoice_pdf(msg, tels, pdf_obj, pdf_name):
+def send_invoice_pdf(msg, tels, pdf_obj, pdf_name, token):
     """Send invoice in whatsapp
     Args:
         msg: Text message
         tels: Comma separated list of telephone numbers.
 
     """
-    token = "c3a87aad6880401b876a7d1eb07b6b67"
     json_data = {'type': 'document',
                  'filename': "{}.pdf".format(pdf_name),
                  'file': pdf_obj,
@@ -54,11 +52,11 @@ def send_invoice_pdf(msg, tels, pdf_obj, pdf_name):
                  'numbers': tels,
                  'token':[token]
     }
-    print("before send")
+    print("before send... token:", token)
     req = requests.post('http://api.mhatsapp.com/api/v3/message/send/',
                         data=json.dumps({'action':json_data}),
                         headers={'Content-type':'application/json'})
-    print("after send")
+    print("after send...")
 
 def get_users_list():
     """Get user list from Makrosum DB
@@ -123,6 +121,9 @@ def normalize_tel(tel_no):
     if tel_no is None:
         return None
     tel_no = ''.join([i for i in tel_no if i.isdigit()])
+    if len(tel_no) == 0:
+        print("Tel no len is zero... returning")
+        return None
     int_tel_no = int(tel_no)
     tel_no = "90" + str(int_tel_no)
     print("TE:", tel_no)
@@ -152,43 +153,45 @@ def get_tels_from_contacts(contact_list):
 
     return tels
 
-def send_giden_invoice(hizli_service, app_type, invoice, uuid, message):
-
+def send_giden_invoice(hizli_service, app_type, invoice, uuid, message, token):
     is_account = invoice['IsAccount']
     envelop_stat = invoice['EnvelopeStatus']
     if is_account == True:
         return
     else:
-        if envelop_stat != 1300 or envelop_stat != 14000:
+        if envelop_stat != 1300 and envelop_stat != 14000:
             return
 
     xml_obj = hizli_service.download_media(app_type, uuid, 'XML')
     xml_str = base64.b64decode(xml_obj)
     xml_dic = xmltodict.parse(xml_str)
-    contact_list = xml_dic['Invoice']['cac:AccountingCustomerParty']['cac:Party']['cac:Contact']
+
+    contact_list = None
+    try:
+        contact_list = xml_dic['Invoice']['cac:AccountingCustomerParty']['cac:Party']['cac:Contact']
+    except:
+        pass
 
     if contact_list is None:
-        return
-    tels = get_tels_from_contacts(contact_list)
-
-    if tels is not None:
-        print("XML Telefonları:", tels)
-        # TODO delete this list
-        tels = "905527932091, 905334993344"
-        pdf_obj = hizli_service.download_media(app_type, uuid, 'PDF')
-        pdf_name = get_file_name(invoice)
-        send_invoice_pdf(message, tels, pdf_obj, pdf_name)
-        time.sleep(1)
-        send_invoice_text(message, tels)
+        print("contact list is None, marking as accounted and returning")
+    else:
+        tels = get_tels_from_contacts(contact_list)
+        if tels is not None:
+            print("XML Telefonları:", tels)
+            pdf_obj = hizli_service.download_media(app_type, uuid, 'PDF')
+            pdf_name = get_file_name(invoice)
+            send_invoice_pdf(message, tels, pdf_obj, pdf_name, token)
+            time.sleep(1)
+            send_invoice_text(message, tels, token)
 
     hizli_service.mark_accounted(uuid, app_type)
 
-def send_gelen_invoice(hizli_service, app_type, invoice, uuid, message, tels):
+def send_gelen_invoice(hizli_service, app_type, invoice, uuid, message, tels, token):
     pdf_obj = hizli_service.download_media(app_type, uuid, 'PDF')
     pdf_name = get_file_name(invoice)
-    send_invoice_pdf(message, tels, pdf_obj, pdf_name)
+    send_invoice_pdf(message, tels, pdf_obj, pdf_name, token)
     time.sleep(1)
-    send_invoice_text(message, tels)
+    send_invoice_text(message, tels, token)
     hizli_service.mark_taken([uuid,], app_type)
 
 def send_invoices(invoices_collection, hbt_user, hbt_password, tels, token,
@@ -201,15 +204,13 @@ def send_invoices(invoices_collection, hbt_user, hbt_password, tels, token,
             app_type = invoice['AppType']
             message = generate_message(invoice, firma_adi, app_type)
             uuid = invoice['UUID']
-            #print("------------------------------\n", invoice)
             if app_type == AppType['GIDEN_E-FATURA'] or \
                     app_type == AppType['GIDEN_E-ARSIV_FATURA']:
                     #app_type == AppType['GIDEN_E-IRSALIYE']:
-                        pass
-                        #send_giden_invoice(hizli_service, app_type, invoice, uuid, message)
+                        send_giden_invoice(hizli_service, app_type, invoice, uuid, message, token)
             elif app_type == AppType['GELEN_E-FATURA'] or \
                     app_type == AppType['GELEN_E-IRSALIYE']:
-                send_gelen_invoice(hizli_service, app_type, invoice, uuid, message, tels)
+                send_gelen_invoice(hizli_service, app_type, invoice, uuid, message, tels, token)
 
 
 if __name__ == '__main__':
@@ -222,9 +223,11 @@ if __name__ == '__main__':
             firma_adi = user['title']
             tels = user['mhatsapptels']
             token = user['mhatsapptoken']
+            print("Getting invoices")
             invoices_collection = get_invoices(hbt_user, hbt_password)
             if len(tels) < 12 or len(token) != 36:
                 continue
+            print("Sending invoices")
             if invoices_collection is not None:
                  send_invoices(invoices_collection, hbt_user, hbt_password,
                                tels, token, firma_adi)
