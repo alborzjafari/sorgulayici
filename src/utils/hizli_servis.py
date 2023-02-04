@@ -16,8 +16,6 @@ class HizliService:
 
     def post(self, method, data):
         response = requests.post(self.url+method, headers=self.headers, data=json.dumps(data))
-        print("response:", response.status_code)
-        print("sresponse:", response)
         if response.status_code != 200:
             return None
         return response.json()
