@@ -278,7 +278,8 @@ if __name__ == '__main__':
     while True:
         users = get_users_list()
         for user in users:
-            print("USER:\n", user)
+            print("-------------------------------------------", flush=True)
+            print("USER: ", user)
             hbt_user = user['hbt_user']
             hbt_password = user['hbt_password']
             firma_adi = user['title']
