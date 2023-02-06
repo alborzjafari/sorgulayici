@@ -278,8 +278,7 @@ if __name__ == '__main__':
     while True:
         users = get_users_list()
         for user in users:
-            print("-------------------------------------------", flush=True)
-            print("USER: ", user)
+            print("\nUSER: ", user)
             hbt_user = user['hbt_user']
             hbt_password = user['hbt_password']
             firma_adi = user['title']
@@ -301,4 +300,6 @@ if __name__ == '__main__':
             if invoices_collection is not None:
                  send_invoices(invoices_collection, hbt_user, hbt_password,
                                tels, token, firma_adi, user_mail, msg_triggers)
+
+            print("-------------------------------------------", flush=True)
         time.sleep(1)
