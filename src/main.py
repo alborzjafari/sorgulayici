@@ -263,8 +263,7 @@ def send_invoices(invoices_collection, hbt_user, hbt_password, tels, token,
             app_type = invoice['AppType']
             message = generate_message(invoice, firma_adi, app_type)
             uuid = invoice['UUID']
-            if app_type != AppType['GELEN_E-IRSALIYE']:
-                continue
+
             if app_type == AppType['GIDEN_E-FATURA'] or \
                     app_type == AppType['GIDEN_E-ARSIV_FATURA'] or \
                     app_type == AppType['GIDEN_E-IRSALIYE']:
