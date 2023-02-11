@@ -222,7 +222,7 @@ def send_giden_invoice(hizli_service, app_type, invoice, uuid, whatsapp_msg, mai
             time.sleep(1)
             send_invoice_text(whatsapp_msg, tels, token)
 
-    izli_service.mark_accounted(uuid, app_type)
+    hizli_service.mark_accounted(uuid, app_type)
 
 def send_gelen_invoice(hizli_service, app_type, invoice, uuid, whatsapp_msg, mail_msg, tels, token, user_mail, msg_triggers):
     if msg_triggers['whatsapp_gelen'] is False and msg_triggers['email_gelen'] is False:
