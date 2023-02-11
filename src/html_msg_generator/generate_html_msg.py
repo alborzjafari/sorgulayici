@@ -5,7 +5,7 @@ def generate_html_msg(firma_adi, alici_unvani, satici_unvani, tarih,
                       fatura_numarasi, fiyat, ticari_temel):
     root = os.path.dirname(os.path.abspath(__file__))
     templates_dir = os.path.join(root, './')
-    env = Environment( loader = FileSystemLoader(templates_dir) )
+    env = Environment(loader = FileSystemLoader(templates_dir))
     template = env.get_template('e_arsiv_imza_template.html')
     filename = os.path.join(root, 'html', 'e_arsiv_imza.html')
     return template.render(
