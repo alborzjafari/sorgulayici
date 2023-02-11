@@ -27,7 +27,8 @@ def send_mail(sender_address, sender_title, sender_pass, receiver_address, msg_t
         receiver_address: Email address of receiver.
         msg_text: Text of Email.
         subject: Subject of Email.
-        attachments: Dictionary of attachments for attaching. {<attachment_name>: <base64_attachment_data, ...}
+        attachments: Dictionary of attachments for attaching.
+                     {<attachment_name>: <base64_attachment_data, ...}
         smtp_host_port: Combination of "<host>:<port>".
     Return:
         bool: True for success False for failure.
@@ -38,20 +39,19 @@ def send_mail(sender_address, sender_title, sender_pass, receiver_address, msg_t
     from_title = Header(sender_title, 'utf-8')
     from_title.append(f'<{sender_address}>', 'ascii')
     message['From'] = from_title
-
-
-    print("FROM:", message['From'])
     message['To'] = receiver_address
     message['Subject'] = subject
+
+    print("FROM:{}\n TO:{}".format(message['From'], message['To']))
 
     message.attach(MIMEText(msg_text, 'html'))
 
     for attachment_name, attachment_data in attachments.items():
         payload = MIMEBase('application', 'octate-stream')
-        payload.set_payload(attachment_data)
         payload.add_header('Content-Transfer-Encoding', 'base64')
-        message.attach(payload)
+        payload.set_payload(attachment_data)
         payload.add_header('Content-Disposition', 'attachment', filename=('utf-8', '', attachment_name))
+        message.attach(payload)
 
     session = smtplib.SMTP_SSL(smtp_host_port, timeout=10)
     session.login(sender_address, sender_pass)
