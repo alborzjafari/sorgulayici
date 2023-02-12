@@ -190,8 +190,8 @@ def get_emails_from_contacts(contact_list):
                 return value
     return None
 
-def send_giden_invoice(hizli_service, app_type, invoice, uuid, whatsapp_msg,
-                       mail_msg, token, firma_adi, msg_triggers):
+def send_giden_invoice(hizli_service, app_type, invoice, uuid, token,
+                       firma_adi, msg_triggers):
     if msg_triggers['email_giden'] is False and \
             msg_triggers['whatsapp_giden'] is False:
         return
@@ -224,6 +224,7 @@ def send_giden_invoice(hizli_service, app_type, invoice, uuid, whatsapp_msg,
         pdf_obj = hizli_service.download_media(app_type, uuid, 'PDF')
         tels = get_tels_from_contacts(contact_list)
         email_address = get_emails_from_contacts(contact_list)
+        whatsapp_msg, mail_msg = generate_message(invoice, firma_adi, app_type)
         if check_email(email_address) is True and msg_triggers['email_giden'] is True:
             attachments = {file_name + ".pdf": pdf_obj,
                            file_name + ".xml": xml_obj}
@@ -261,16 +262,23 @@ def send_gelen_invoice(hizli_service, app_type, invoice, uuid, whatsapp_msg,
     except:
         pass
 
-    if check_email(user_mail) is True and msg_triggers['email_gelen'] is True:
-        attachments = {file_name + ".pdf": pdf_obj,
-                       file_name + ".xml": xml_obj}
-        send_mail(SENDER_MAIL, sender_title, SENDER_PASS, user_mail, mail_msg,
-                  subject, attachments, SMTP_HOST_PORT)
+    whatsapp_msg, mail_msg = str(), str()
+    mail_gonder = msg_triggers['email_gelen']
+    wspp_gonder = msg_triggers['whatsapp_gelen']
 
-    if msg_triggers['whatsapp_gelen'] is True:
-        send_invoice_pdf(whatsapp_msg, tels, pdf_obj, file_name, token)
-        time.sleep(1)
-        send_invoice_text(whatsapp_msg, tels, token)
+    if mail_gonder is True or wspp_gonder is True:
+        whatsapp_msg, mail_msg = generate_message(invoice, firma_adi, app_type)
+
+        if check_email(user_mail) is True and mail_gonder is True:
+            attachments = {file_name + ".pdf": pdf_obj,
+                           file_name + ".xml": xml_obj}
+            send_mail(SENDER_MAIL, sender_title, SENDER_PASS, user_mail,
+                      mail_msg, subject, attachments, SMTP_HOST_PORT)
+
+        if wspp_gonder is True:
+            send_invoice_pdf(whatsapp_msg, tels, pdf_obj, file_name, token)
+            time.sleep(1)
+            send_invoice_text(whatsapp_msg, tels, token)
 
     hizli_service.mark_taken([uuid,], app_type)
 
@@ -283,21 +291,17 @@ def send_invoices(invoices_collection, hbt_user, hbt_password, tels, token,
             continue
         for invoice in invoices_list:
             app_type = invoice['AppType']
-            whatsapp_msg, mail_msg = generate_message(invoice,
-                                                      firma_adi, app_type)
             uuid = invoice['UUID']
 
             if app_type == AppType['GIDEN_E-FATURA'] or \
                     app_type == AppType['GIDEN_E-ARSIV_FATURA'] or \
                     app_type == AppType['GIDEN_E-IRSALIYE']:
                         send_giden_invoice(hizli_service, app_type, invoice,
-                                           uuid, whatsapp_msg, mail_msg, token,
-                                           firma_adi, msg_triggers)
+                                           uuid, token, firma_adi, msg_triggers)
             elif app_type == AppType['GELEN_E-FATURA'] or \
                     app_type == AppType['GELEN_E-IRSALIYE']:
                 send_gelen_invoice(hizli_service, app_type, invoice, uuid,
-                                   whatsapp_msg, mail_msg, tels, token,
-                                   user_mail, msg_triggers)
+                                   tels, token, user_mail, msg_triggers)
 
 
 if __name__ == '__main__':
