@@ -68,7 +68,8 @@ def get_users_list():
     """Get user list from Makrosum DB
     """
     users = list()
-    db = MsSqlConnector('newmssql.makrosum.com', 'sa', '3genYildiz.', 'ffatura_main', '1433')
+    db = MsSqlConnector('newmssql.makrosum.com', 'sa', '3genYildiz.',
+                        'ffatura_main', '1433')
     db.createConnection()
     users = db.selectProcedure('kullanicilari_getir')
 
@@ -103,18 +104,27 @@ def generate_message(invoice, firma_adi, app_type):
     if app_type == AppType['GELEN_E-FATURA'] or app_type == AppType['GELEN_E-IRSALIYE']:
         if invoice['ProfileId'] == 'TEMELIRSALIYE':
             template = MsgTemplates['IRSALIYE']
-            whatsapp_msg = template.format(firma_adi, target_title, date, doc_id, profile_id)
-            mail_msg = generate_html_msg(firma_adi, firma_adi, target_title, date, doc_id, payable_amount + " " + currency_code, profile_id)
+            whatsapp_msg = template.format(firma_adi, target_title, date,
+                                           doc_id, profile_id)
+            mail_msg = generate_html_msg(firma_adi, target_title, date, doc_id,
+                                         payable_amount + " " + currency_code,
+                                         profile_id)
         else:
             template = MsgTemplates['FATURA']
-            whatsapp_msg = template.format(firma_adi, target_title, date, doc_id, payable_amount,
-                                  currency_code, profile_id)
-            mail_msg = generate_html_msg(firma_adi, firma_adi, target_title, date, doc_id, payable_amount + " " + currency_code, profile_id)
+            whatsapp_msg = template.format(firma_adi, target_title, date,
+                                           doc_id, payable_amount,
+                                           currency_code, profile_id)
+            mail_msg = generate_html_msg(firma_adi, target_title, date, doc_id,
+                                         payable_amount + " " + currency_code,
+                                         profile_id)
     else:
         template = MsgTemplates['GIDEN_FATURA']
-        whatsapp_msg = template.format(target_title, firma_adi, date, doc_id, payable_amount,
-                              currency_code, profile_id)
-        mail_msg = generate_html_msg(target_title, target_title, firma_adi, date, doc_id, payable_amount + " " + currency_code, profile_id)
+        whatsapp_msg = template.format(target_title, firma_adi, date, doc_id,
+                                       payable_amount, currency_code,
+                                       profile_id)
+        mail_msg = generate_html_msg(target_title, firma_adi, date, doc_id,
+                                     payable_amount + " " + currency_code,
+                                     profile_id)
 
     return whatsapp_msg, mail_msg
 
@@ -180,8 +190,10 @@ def get_emails_from_contacts(contact_list):
                 return value
     return None
 
-def send_giden_invoice(hizli_service, app_type, invoice, uuid, whatsapp_msg, mail_msg, token, firma_adi, msg_triggers):
-    if msg_triggers['email_giden'] is False and msg_triggers['whatsapp_giden'] is False:
+def send_giden_invoice(hizli_service, app_type, invoice, uuid, whatsapp_msg,
+                       mail_msg, token, firma_adi, msg_triggers):
+    if msg_triggers['email_giden'] is False and \
+            msg_triggers['whatsapp_giden'] is False:
         return
 
     is_account = invoice['IsAccount']
@@ -213,10 +225,12 @@ def send_giden_invoice(hizli_service, app_type, invoice, uuid, whatsapp_msg, mai
         tels = get_tels_from_contacts(contact_list)
         email_address = get_emails_from_contacts(contact_list)
         if check_email(email_address) is True and msg_triggers['email_giden'] is True:
-            attachments = {file_name + ".pdf": pdf_obj, file_name + ".xml": xml_obj}
+            attachments = {file_name + ".pdf": pdf_obj,
+                           file_name + ".xml": xml_obj}
             subject = get_mail_subject(invoice)
             sender_title = f"{firma_adi}"
-            send_mail(SENDER_MAIL, sender_title, SENDER_PASS, email_address, mail_msg, subject, attachments, SMTP_HOST_PORT)
+            send_mail(SENDER_MAIL, sender_title, SENDER_PASS, email_address,
+                      mail_msg, subject, attachments, SMTP_HOST_PORT)
         if tels is not None and msg_triggers['whatsapp_giden'] is True:
             send_invoice_pdf(whatsapp_msg, tels, pdf_obj, file_name, token)
             time.sleep(1)
@@ -224,8 +238,10 @@ def send_giden_invoice(hizli_service, app_type, invoice, uuid, whatsapp_msg, mai
 
     hizli_service.mark_accounted(uuid, app_type)
 
-def send_gelen_invoice(hizli_service, app_type, invoice, uuid, whatsapp_msg, mail_msg, tels, token, user_mail, msg_triggers):
-    if msg_triggers['whatsapp_gelen'] is False and msg_triggers['email_gelen'] is False:
+def send_gelen_invoice(hizli_service, app_type, invoice, uuid, whatsapp_msg,
+                       mail_msg, tels, token, user_mail, msg_triggers):
+    if msg_triggers['whatsapp_gelen'] is False and \
+            msg_triggers['email_gelen'] is False:
         return
 
     file_name = get_file_name(invoice)
@@ -246,8 +262,10 @@ def send_gelen_invoice(hizli_service, app_type, invoice, uuid, whatsapp_msg, mai
         pass
 
     if check_email(user_mail) is True and msg_triggers['email_gelen'] is True:
-        attachments = {file_name + ".pdf": pdf_obj, file_name + ".xml": xml_obj}
-        send_mail(SENDER_MAIL, sender_title, SENDER_PASS, user_mail, mail_msg, subject, attachments, SMTP_HOST_PORT)
+        attachments = {file_name + ".pdf": pdf_obj,
+                       file_name + ".xml": xml_obj}
+        send_mail(SENDER_MAIL, sender_title, SENDER_PASS, user_mail, mail_msg,
+                  subject, attachments, SMTP_HOST_PORT)
 
     if msg_triggers['whatsapp_gelen'] is True:
         send_invoice_pdf(whatsapp_msg, tels, pdf_obj, file_name, token)
@@ -265,16 +283,21 @@ def send_invoices(invoices_collection, hbt_user, hbt_password, tels, token,
             continue
         for invoice in invoices_list:
             app_type = invoice['AppType']
-            whatsapp_msg, mail_msg = generate_message(invoice, firma_adi, app_type)
+            whatsapp_msg, mail_msg = generate_message(invoice,
+                                                      firma_adi, app_type)
             uuid = invoice['UUID']
 
             if app_type == AppType['GIDEN_E-FATURA'] or \
                     app_type == AppType['GIDEN_E-ARSIV_FATURA'] or \
                     app_type == AppType['GIDEN_E-IRSALIYE']:
-                        send_giden_invoice(hizli_service, app_type, invoice, uuid, whatsapp_msg, mail_msg, token, firma_adi, msg_triggers)
+                        send_giden_invoice(hizli_service, app_type, invoice,
+                                           uuid, whatsapp_msg, mail_msg, token,
+                                           firma_adi, msg_triggers)
             elif app_type == AppType['GELEN_E-FATURA'] or \
                     app_type == AppType['GELEN_E-IRSALIYE']:
-                send_gelen_invoice(hizli_service, app_type, invoice, uuid, whatsapp_msg, mail_msg, tels, token, user_mail, msg_triggers)
+                send_gelen_invoice(hizli_service, app_type, invoice, uuid,
+                                   whatsapp_msg, mail_msg, tels, token,
+                                   user_mail, msg_triggers)
 
 
 if __name__ == '__main__':
