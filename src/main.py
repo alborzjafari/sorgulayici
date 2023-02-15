@@ -129,11 +129,14 @@ def generate_message(invoice, firma_adi, app_type):
     return whatsapp_msg, mail_msg
 
 def get_file_name(invoice):
-    date = datetime.fromisoformat(invoice['IssueDate']).strftime('%d-%m-%Y')
-    doc_id = invoice['DocumentId']
-    target_title = invoice['TargetTitle']
+    date = datetime.fromisoformat(invoice['IssueDate']).strftime('%d-%m-%Y').strip()
+    doc_id = invoice['DocumentId'].strip()
+    target_title = invoice['TargetTitle'].strip()
     file_name = "{}-({})-{}".format(doc_id, date, target_title)
-    return file_name
+    if file_name[len(file_name)-1] == '.' or file_name[len(file_name)-1] == '-':
+        tmp_file_name = file_name[:-1]
+        file_name = tmp_file_name
+    return file_name.replace("..", ".").strip()
 
 def get_mail_subject(invoice):
     # 187 for »
