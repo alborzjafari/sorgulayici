@@ -136,7 +136,14 @@ def get_file_name(invoice):
     if file_name[len(file_name)-1] == '.' or file_name[len(file_name)-1] == '-':
         tmp_file_name = file_name[:-1]
         file_name = tmp_file_name
-    return file_name.replace("..", ".").strip()
+
+    multi_space_removed = re.sub(' +', ' ', file_name)
+    file_name = multi_space_removed
+
+    double_dots_removed = re.sub('\.+', '.', file_name)
+    file_name = double_dots_removed
+
+    return file_name.strip()
 
 def get_mail_subject(invoice):
     # 187 for »
